@@ -131,7 +131,7 @@ cdc-pipeline/
 
 ```bash
 # 1. Clone and enter the repo
-git clone <your-repo-url> && cd cdc-pipeline
+git clone "https://github.com/sunil-polupalli/cdc-pipeline.git" && cd cdc-pipeline
 
 # 2. Set up environment variables
 cp .env.example .env

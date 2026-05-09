@@ -38,11 +38,12 @@ services:
       - zookeeper_data:/var/lib/zookeeper/data
       - zookeeper_log:/var/lib/zookeeper/log
     healthcheck:
-      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok"]
+      # cub (Confluent Utility Belt) is bundled in the cp-zookeeper image
+      test: ["CMD", "cub", "zk-ready", "localhost:2181", "30"]
       interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 15s
+      timeout: 15s
+      retries: 15
+      start_period: 30s
 
   # ── Kafka ────────────────────────────────────────────────────────────────────
   kafka:
@@ -71,9 +72,10 @@ services:
     volumes:
       - kafka_data:/var/lib/kafka/data
     healthcheck:
-      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092"]
+      # cub kafka-ready checks that N brokers are ready; bundled in cp-kafka image
+      test: ["CMD", "cub", "kafka-ready", "-b", "localhost:9092", "1", "30"]
       interval: 15s
-      timeout: 10s
+      timeout: 35s
       retries: 10
       start_period: 30s
 
