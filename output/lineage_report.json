@@ -1,0 +1,89 @@
+[
+  {
+    "source_table": "inventory.customers",
+    "schema_version": 1,
+    "active_from": "2025-01-01T00:00:00+00:00",
+    "active_to": "2025-01-01T00:15:00+00:00",
+    "transformation_logic": "Debezium CDC event processing, direct mapping",
+    "output_partitions": [
+      "/data_lake/customers/2025-01-01/c/",
+      "/data_lake/customers/2025-01-01/u/"
+    ],
+    "output_schema": {
+      "id": "int",
+      "first_name": "string",
+      "last_name": "string",
+      "email": "string",
+      "created_at": "timestamp"
+    }
+  },
+  {
+    "source_table": "inventory.customers",
+    "schema_version": 2,
+    "active_from": "2025-01-01T00:15:00+00:00",
+    "active_to": null,
+    "transformation_logic": "Debezium CDC event processing, direct mapping",
+    "output_partitions": [
+      "/data_lake/customers/2025-01-01/c/"
+    ],
+    "output_schema": {
+      "id": "int",
+      "first_name": "string",
+      "last_name": "string",
+      "email": "string",
+      "created_at": "timestamp",
+      "country_code": "string"
+    }
+  },
+  {
+    "source_table": "inventory.products",
+    "schema_version": 1,
+    "active_from": "2025-01-01T00:00:00+00:00",
+    "active_to": "2025-01-01T00:10:00+00:00",
+    "transformation_logic": "Debezium CDC event processing, direct mapping",
+    "output_partitions": [
+      "/data_lake/products/2025-01-01/c/",
+      "/data_lake/products/2025-01-01/u/"
+    ],
+    "output_schema": {
+      "id": "int",
+      "name": "string",
+      "description": "string",
+      "price": "decimal"
+    }
+  },
+  {
+    "source_table": "inventory.products",
+    "schema_version": 2,
+    "active_from": "2025-01-01T00:10:00+00:00",
+    "active_to": null,
+    "transformation_logic": "Debezium CDC event processing, direct mapping",
+    "output_partitions": [
+      "/data_lake/products/2025-01-01/c/"
+    ],
+    "output_schema": {
+      "id": "int",
+      "name": "string",
+      "product_description": "string",
+      "price": "decimal"
+    }
+  },
+  {
+    "source_table": "inventory.orders",
+    "schema_version": 1,
+    "active_from": "2025-01-01T00:00:00+00:00",
+    "active_to": null,
+    "transformation_logic": "Debezium CDC event processing, direct mapping",
+    "output_partitions": [
+      "/data_lake/orders/2025-01-01/c/",
+      "/data_lake/orders/2025-01-01/u/"
+    ],
+    "output_schema": {
+      "id": "int",
+      "customer_id": "int",
+      "product_id": "int",
+      "quantity": "int",
+      "order_date": "timestamp"
+    }
+  }
+]

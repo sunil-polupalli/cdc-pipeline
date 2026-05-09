@@ -1,0 +1,152 @@
+version: "3.8"
+
+services:
+
+  # ── MySQL ────────────────────────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: cdc-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/my.cnf:/etc/mysql/conf.d/custom.cnf:ro
+      - ./mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "--password=${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 60s
+
+  # ── Zookeeper ────────────────────────────────────────────────────────────────
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: cdc-zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SYNC_LIMIT: 2
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_log:/var/lib/zookeeper/log
+    healthcheck:
+      test: ["CMD-SHELL", "echo ruok | nc localhost 2181 | grep imok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  # ── Kafka ────────────────────────────────────────────────────────────────────
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: cdc-kafka
+    restart: unless-stopped
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 300000
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    ports:
+      - "29092:29092"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # ── Kafka Connect (Debezium) ─────────────────────────────────────────────────
+  connect:
+    image: debezium/connect:2.5
+    container_name: cdc-connect
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    environment:
+      BOOTSTRAP_SERVERS: kafka:9092
+      GROUP_ID: 1
+      CONFIG_STORAGE_TOPIC: my_connect_configs
+      OFFSET_STORAGE_TOPIC: my_connect_offsets
+      STATUS_STORAGE_TOPIC: my_connect_statuses
+      KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      KEY_CONVERTER_SCHEMAS_ENABLED: "true"
+      VALUE_CONVERTER_SCHEMAS_ENABLED: "true"
+      CONNECT_REST_PORT: 8083
+    ports:
+      - "8083:8083"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8083/connectors || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 60s
+
+  # ── Pipeline Processor ───────────────────────────────────────────────────────
+  processor:
+    build:
+      context: ./processor
+      dockerfile: Dockerfile
+    container_name: cdc-processor
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+      connect:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_GROUP_ID: ${KAFKA_GROUP_ID:-cdc-processor-group}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      DEBEZIUM_USER: ${DEBEZIUM_USER}
+      DEBEZIUM_PASSWORD: ${DEBEZIUM_PASSWORD}
+      KAFKA_CONNECT_URL: http://connect:8083
+      SCHEMA_DB_PATH: /state/schemas.db
+      DATA_LAKE_ROOT: /data_lake
+      LINEAGE_REPORT_PATH: /output/lineage_report.json
+      FLUSH_BATCH_SIZE: ${FLUSH_BATCH_SIZE:-200}
+      FLUSH_INTERVAL_SEC: ${FLUSH_INTERVAL_SEC:-30}
+      LINEAGE_REPORT_INTERVAL_SEC: ${LINEAGE_REPORT_INTERVAL_SEC:-60}
+    volumes:
+      - ./data_lake:/data_lake
+      - ./state:/state
+      - ./output:/output
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f main.py || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  mysql_data:
+  zookeeper_data:
+  zookeeper_log:
+  kafka_data:
